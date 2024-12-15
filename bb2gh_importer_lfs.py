@@ -45,20 +45,37 @@ def configure_git_lfs():
     subprocess.run(["git", "lfs", "install"], check=True)
     print("Git LFS configured.")
 
-def migrate_large_files_to_lfs(repo_name):
+def migrate_large_files_to_lfs():
     """Identify and migrate large files to Git LFS."""
     try:
-        # Initialize Git LFS in the repository
-        subprocess.run(["git", "init"], check=True)
-        subprocess.run(["git", "lfs", "install"], check=True)
+        # Find large files (>100MB)
+        result = subprocess.run(
+            ["git", "rev-list", "--objects", "--all"],
+            stdout=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        large_files = [
+            line.split(" ")[1] for line in result.stdout.splitlines()
+            if subprocess.run(["git", "cat-file", "-s", line.split(" ")[0]],
+                              stdout=subprocess.PIPE, text=True).stdout.strip() > "104857600"
+        ]
 
-        # Track large files with Git LFS
-        subprocess.run(["git", "lfs", "track", "*.largefile"], check=True)
+        if not large_files:
+            print("No large files found exceeding 100MB.")
+            return
+
+        for large_file in large_files:
+            subprocess.run(["git", "lfs", "track", large_file])
+            print(f"Tracked {large_file} with Git LFS.")
+
+        # Add .gitattributes
         subprocess.run(["git", "add", ".gitattributes"], check=True)
-        subprocess.run(["git", "commit", "-m", "Configure Git LFS for large files"], check=True)
-        print(f"Large files tracked with Git LFS for {repo_name}.")
+        subprocess.run(["git", "commit", "-m", "Track large files with Git LFS"], check=True)
+
     except subprocess.CalledProcessError as e:
-        print(f"Error configuring Git LFS for {repo_name}: {e}")
+        print(f"Error identifying or tracking large files: {e}")
+
 
 def clone_and_migrate(repo_name):
     """Clone a Bitbucket repository and push it to GitHub."""
@@ -74,12 +91,13 @@ def clone_and_migrate(repo_name):
         configure_git_lfs()
 
         # Check for large files and track them with LFS
-        migrate_large_files_to_lfs(repo_name)
+        migrate_large_files_to_lfs()
 
         # Push the repository to GitHub
         github_url = f"https://{GITHUB_TOKEN}@github.com/{GITHUB_ORG}/{repo_name}.git"
         subprocess.run(["git", "remote", "set-url", "origin", github_url], check=True)
-        subprocess.run(["git", "push", "--mirror"], check=True)
+        subprocess.run(["git", "push", "--all"], check=True)  # Push branches
+        subprocess.run(["git", "push", "--tags"], check=True)  # Push tags
 
         print(f"Successfully migrated {repo_name} to GitHub.")
     except subprocess.CalledProcessError as e:
