@@ -10,6 +10,7 @@ GITHUB_TOKEN = "your_github_token"  # Replace with your GitHub personal access t
 BITBUCKET_USERNAME = "your_bitbucket_username"  # Replace with your Bitbucket username
 BITBUCKET_APP_PASSWORD = "your_bitbucket_app_password"  # Replace with your Bitbucket app password
 BITBUCKET_ORG = "your_bitbucket_org"  # Replace with your Bitbucket organization name
+REPO_LIST = "your_repo_list.txt" # Replace with repo list
 
 def migrate_issues(repo_name):
     """Migrate issues from Bitbucket to GitHub."""
@@ -109,7 +110,7 @@ def clone_and_migrate(repo_name):
 
 def main():
     # Read the repository names from the file
-    with open("recent_repositories.txt", "r") as file:
+    with open("{REPO_LIST}", "r") as file:
         repo_names = [line.strip() for line in file if line.strip()]
 
     print(f"Starting migration of {len(repo_names)} repositories...")
