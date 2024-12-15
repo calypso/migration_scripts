@@ -58,7 +58,7 @@ def migrate_large_files_to_lfs():
         large_files = []
         for line in result.stdout.splitlines():
             parts = line.split(" ")
-            if len(parts) > 1:  # Ensure we have both hash and file name
+            if len(parts) > 1:
                 obj_hash = parts[0]
                 file_path = parts[1]
                 obj_size_result = subprocess.run(
@@ -76,8 +76,10 @@ def migrate_large_files_to_lfs():
             return
 
         for large_file in large_files:
-            subprocess.run(["git", "lfs", "track", large_file], check=True)
-            print(f"Tracked {large_file} with Git LFS.")
+            if large_file.endswith(('.tpk', '.json', '.txt', '.a', '.bak', '.zip', 'ArcGis', '.dll', '.box', '.aab', '.apk', '.qpkg', '.mmpk')):  # Check for specific file types
+                subprocess.run(["git", "lfs", "track", large_file], check=True)
+                subprocess.run(["git", "add", large_file], check=True)
+                print(f"Tracked and added {large_file} with Git LFS.")
 
         # Add .gitattributes
         subprocess.run(["git", "add", ".gitattributes"], check=True)
@@ -85,8 +87,6 @@ def migrate_large_files_to_lfs():
 
     except subprocess.CalledProcessError as e:
         print(f"Error identifying or tracking large files: {e}")
-    except ValueError as e:
-        print(f"Error parsing object size: {e}")
 
 def clone_and_migrate(repo_name):
     """Clone a Bitbucket repository and push it to GitHub."""
