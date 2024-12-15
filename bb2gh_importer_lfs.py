@@ -10,7 +10,6 @@ GITHUB_TOKEN = "your_github_token"  # Replace with your GitHub personal access t
 BITBUCKET_USERNAME = "your_bitbucket_username"  # Replace with your Bitbucket username
 BITBUCKET_APP_PASSWORD = "your_bitbucket_app_password"  # Replace with your Bitbucket app password
 BITBUCKET_ORG = "your_bitbucket_org"  # Replace with your Bitbucket organization name
-REPO_LIST = "your_repo_list.txt" # Replace with repo list
 
 def migrate_issues(repo_name):
     """Migrate issues from Bitbucket to GitHub."""
@@ -56,18 +55,28 @@ def migrate_large_files_to_lfs():
             text=True,
             check=True
         )
-        large_files = [
-            line.split(" ")[1] for line in result.stdout.splitlines()
-            if subprocess.run(["git", "cat-file", "-s", line.split(" ")[0]],
-                              stdout=subprocess.PIPE, text=True).stdout.strip() > "104857600"
-        ]
+        large_files = []
+        for line in result.stdout.splitlines():
+            parts = line.split(" ")
+            if len(parts) > 1:  # Ensure we have both hash and file name
+                obj_hash = parts[0]
+                file_path = parts[1]
+                obj_size_result = subprocess.run(
+                    ["git", "cat-file", "-s", obj_hash],
+                    stdout=subprocess.PIPE,
+                    text=True,
+                    check=True
+                )
+                obj_size = int(obj_size_result.stdout.strip())
+                if obj_size > 104857600:  # 100MB
+                    large_files.append(file_path)
 
         if not large_files:
             print("No large files found exceeding 100MB.")
             return
 
         for large_file in large_files:
-            subprocess.run(["git", "lfs", "track", large_file])
+            subprocess.run(["git", "lfs", "track", large_file], check=True)
             print(f"Tracked {large_file} with Git LFS.")
 
         # Add .gitattributes
@@ -76,7 +85,8 @@ def migrate_large_files_to_lfs():
 
     except subprocess.CalledProcessError as e:
         print(f"Error identifying or tracking large files: {e}")
-
+    except ValueError as e:
+        print(f"Error parsing object size: {e}")
 
 def clone_and_migrate(repo_name):
     """Clone a Bitbucket repository and push it to GitHub."""
@@ -110,7 +120,7 @@ def clone_and_migrate(repo_name):
 
 def main():
     # Read the repository names from the file
-    with open("{REPO_LIST}", "r") as file:
+    with open("recent_repositories.txt", "r") as file:
         repo_names = [line.strip() for line in file if line.strip()]
 
     print(f"Starting migration of {len(repo_names)} repositories...")
