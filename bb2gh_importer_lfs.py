@@ -82,16 +82,20 @@ def migrate_large_files_to_lfs():
             return
 
         for obj_hash, file_path in large_files:
-            print(f"Checking if file exists in working tree: {file_path}")
-            if not os.path.exists(file_path):
-                print(f"Restoring missing file from history: {file_path}")
-                # Restore the file from Git history
-                subprocess.run(["git", "checkout", obj_hash, "--", file_path], check=True)
+            print(f"Checking if file exists in working tree or history: {file_path}")
+            try:
+                # Try restoring the file from the Git object if it doesn't exist in the working tree
+                if not os.path.exists(file_path):
+                    print(f"Restoring missing file from history: {file_path}")
+                    subprocess.run(["git", "checkout", obj_hash, "--", file_path], check=True)
 
-            print(f"Tracking large file with Git LFS: {file_path}")
-            subprocess.run(["git", "lfs", "track", file_path], check=True)
-            print(f"Adding large file to Git: {file_path}")
-            subprocess.run(["git", "add", file_path], check=True)
+                # Track and add the file to Git LFS
+                print(f"Tracking large file with Git LFS: {file_path}")
+                subprocess.run(["git", "lfs", "track", file_path], check=True)
+                subprocess.run(["git", "add", file_path], check=True)
+                print(f"Added large file to Git: {file_path}")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to restore or track file: {file_path}. Error: {e}")
 
         # Ensure .gitattributes is committed
         print("Adding .gitattributes to Git...")
