@@ -56,24 +56,31 @@ def migrate_large_files_to_lfs():
         for root, _, files in os.walk("."):
             for file in files:
                 file_path = os.path.join(root, file)
+                # Exclude files in the .git directory
+                if ".git" in file_path:
+                    continue
                 if os.path.isfile(file_path):  # Check if it's a file
                     file_size = os.path.getsize(file_path)
                     if file_size > 104857600:  # 100MB
                         large_files.append(file_path)
+                        print(f"Identified large file: {file_path} ({file_size / (1024 * 1024):.2f} MB)")
 
         if not large_files:
             print("No large files found exceeding 100MB.")
             return
 
         for large_file in large_files:
+            print(f"Tracking large file with Git LFS: {large_file}")
             subprocess.run(["git", "lfs", "track", large_file], check=True)
+            print(f"Adding large file to Git: {large_file}")
             subprocess.run(["git", "add", large_file], check=True)
-            print(f"Tracked and added {large_file} with Git LFS.")
 
-        # Add .gitattributes
+        # Ensure .gitattributes is committed
+        print("Adding .gitattributes to Git...")
         subprocess.run(["git", "add", ".gitattributes"], check=True)
         subprocess.run(["git", "commit", "-m", "Track large files with Git LFS"], check=True)
-
+        print("Committed .gitattributes and large files.")
+    
     except subprocess.CalledProcessError as e:
         print(f"Error identifying or tracking large files: {e}")
     except Exception as e:
