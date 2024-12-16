@@ -11,6 +11,9 @@ BITBUCKET_USERNAME = "your_bitbucket_username"  # Replace with your Bitbucket us
 BITBUCKET_APP_PASSWORD = "your_bitbucket_app_password"  # Replace with your Bitbucket app password
 BITBUCKET_ORG = "your_bitbucket_org"  # Replace with your Bitbucket organization name
 
+# Path to the file containing repository names
+REPOSITORIES_FILE = "recent_repositories.txt"
+
 def migrate_issues(repo_name):
     """Migrate issues from Bitbucket to GitHub."""
     try:
@@ -48,38 +51,24 @@ def configure_git_lfs():
 def migrate_large_files_to_lfs():
     """Identify and migrate large files to Git LFS."""
     try:
-        # Find large files (>100MB)
-        result = subprocess.run(
-            ["git", "rev-list", "--objects", "--all"],
-            stdout=subprocess.PIPE,
-            text=True,
-            check=True
-        )
         large_files = []
-        for line in result.stdout.splitlines():
-            parts = line.split(" ")
-            if len(parts) > 1:
-                obj_hash = parts[0]
-                file_path = parts[1]
-                obj_size_result = subprocess.run(
-                    ["git", "cat-file", "-s", obj_hash],
-                    stdout=subprocess.PIPE,
-                    text=True,
-                    check=True
-                )
-                obj_size = int(obj_size_result.stdout.strip())
-                if obj_size > 104857600:  # 100MB
-                    large_files.append(file_path)
+        # Walk through the repository's working directory
+        for root, _, files in os.walk("."):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if os.path.isfile(file_path):  # Check if it's a file
+                    file_size = os.path.getsize(file_path)
+                    if file_size > 104857600:  # 100MB
+                        large_files.append(file_path)
 
         if not large_files:
             print("No large files found exceeding 100MB.")
             return
 
         for large_file in large_files:
-            if large_file.endswith(('.tpk', '.json', '.txt', '.a', '.bak', '.zip', 'ArcGis', '.dll', '.box', '.aab', '.apk', '.qpkg', '.mmpk')):  # Check for specific file types
-                subprocess.run(["git", "lfs", "track", large_file], check=True)
-                subprocess.run(["git", "add", large_file], check=True)
-                print(f"Tracked and added {large_file} with Git LFS.")
+            subprocess.run(["git", "lfs", "track", large_file], check=True)
+            subprocess.run(["git", "add", large_file], check=True)
+            print(f"Tracked and added {large_file} with Git LFS.")
 
         # Add .gitattributes
         subprocess.run(["git", "add", ".gitattributes"], check=True)
@@ -87,6 +76,8 @@ def migrate_large_files_to_lfs():
 
     except subprocess.CalledProcessError as e:
         print(f"Error identifying or tracking large files: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
 
 def clone_and_migrate(repo_name):
     """Clone a Bitbucket repository and push it to GitHub."""
@@ -120,7 +111,7 @@ def clone_and_migrate(repo_name):
 
 def main():
     # Read the repository names from the file
-    with open("recent_repositories.txt", "r") as file:
+    with open(REPOSITORIES_FILE, "r") as file:
         repo_names = [line.strip() for line in file if line.strip()]
 
     print(f"Starting migration of {len(repo_names)} repositories...")
