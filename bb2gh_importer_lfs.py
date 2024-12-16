@@ -49,7 +49,7 @@ def configure_git_lfs():
     print("Git LFS configured.")
 
 def migrate_large_files_to_lfs():
-    """Identify and migrate large files to Git LFS."""
+    """Identify and migrate large files to Git LFS, including those only in Git history."""
     try:
         large_files = []
         print("Scanning files in the repository for large files...")
@@ -74,24 +74,31 @@ def migrate_large_files_to_lfs():
                 )
                 obj_size = int(obj_size_result.stdout.strip())
                 if obj_size > 104857600:  # 100MB
-                    large_files.append(file_path)
+                    large_files.append((obj_hash, file_path))
                     print(f"Identified large file in history: {file_path} ({obj_size / (1024 * 1024):.2f} MB)")
 
         if not large_files:
             print("No large files found exceeding 100MB.")
             return
 
-        for large_file in large_files:
-            print(f"Tracking large file with Git LFS: {large_file}")
-            subprocess.run(["git", "lfs", "track", large_file], check=True)
-            subprocess.run(["git", "add", large_file], check=True)
-            print(f"Added large file to Git: {large_file}")
+        for obj_hash, file_path in large_files:
+            print(f"Checking if file exists in working tree: {file_path}")
+            if not os.path.exists(file_path):
+                print(f"Restoring missing file from history: {file_path}")
+                # Restore the file from Git history
+                subprocess.run(["git", "checkout", obj_hash, "--", file_path], check=True)
+
+            print(f"Tracking large file with Git LFS: {file_path}")
+            subprocess.run(["git", "lfs", "track", file_path], check=True)
+            print(f"Adding large file to Git: {file_path}")
+            subprocess.run(["git", "add", file_path], check=True)
 
         # Ensure .gitattributes is committed
         print("Adding .gitattributes to Git...")
         subprocess.run(["git", "add", ".gitattributes"], check=True)
         subprocess.run(["git", "commit", "-m", "Track large files with Git LFS"], check=True)
         print("Committed .gitattributes and large files.")
+
     except subprocess.CalledProcessError as e:
         print(f"Error identifying or tracking large files: {e}")
     except Exception as e:
